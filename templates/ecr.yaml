@@ -1,0 +1,18 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  PipelineName:
+    Type: String
+
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref PipelineName
+
+
+Outputs:
+  Repository:
+    Value: !Ref Repository

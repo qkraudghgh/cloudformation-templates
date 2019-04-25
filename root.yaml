@@ -1,0 +1,159 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+
+Description: >
+  web-page AutoDeploy CodePipeline Templates
+
+
+Parameters:
+  GitHubUser:
+    Type: String
+    Default: qkraudghgh
+    Description: Your username on GitHub.
+
+  GitHubRepo:
+    Type: String
+    Default: cloudformation-test
+    Description: The repo name of the sample service.
+
+  GitHubBranch:
+    Type: String
+    Default: develop
+    Description: The branch of the repo to continuously deploy.
+
+  GitHubToken:
+    Type: String
+    NoEcho: true
+    Description: >
+      Token for the user specified above. (https://github.com/settings/tokens)
+
+  PipelineName:
+    Type: String
+    Description: >
+      Type your Codepipeline service name
+
+  TargetName:
+    Type: String
+    Description: >
+      Type your Deploy Targetname
+      If you use Production Env -> ASG Name
+      If you use alpha, bravo ENv -> Instance Name
+
+  CodeDeployAppName:
+    Type: String
+    Description: >
+      If you want exist CodeDeploy Application
+
+  LoadBalancerName:
+    Type: String
+    Description: >
+      Enter only if ENV is Production
+
+  Package:
+    Type: String
+    Description: >
+      choose one [korea, japan]
+    AllowedValues:
+      - korea
+      - japan
+
+  Env:
+    Type: String
+    Description: Choose one [production, alpha, bravo]
+    AllowedValues:
+      - production
+      - alpha
+      - bravo
+
+  TemplateBucket:
+    Type: String
+    Description: >
+      The S3 bucket from which to fetch the templates used by this stack.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      GitHubUser:
+        default: "User"
+      GitHubRepo:
+        default: "Repo"
+      GitHubBranch:
+        default: "Branch"
+      GitHubToken:
+        default: "Personal Access Token"
+    ParameterGroups:
+      - Label:
+          default: GitHub Configuration
+        Parameters:
+          - GitHubRepo
+          - GitHubBranch
+          - GitHubUser
+          - GitHubToken
+      - Label:
+          default: App Configuration
+        Parameters:
+          - Package
+          - Env
+      - Label:
+          default: Stack Configuration
+        Parameters:
+          - TemplateBucket
+      - Label:
+          default: Deploy Configuration
+        Parameters:
+          - PipelineName
+          - CodeDeployAppName
+          - TargetName
+          - LoadBalancerName
+
+Conditions:
+  CreateProdResources: !Equals [ !Ref Env, production ]
+  BravoConditions: !Equals [ !Ref Env, bravo ]
+  AlphaConditions: !Equals [ !Ref Env, alpha ]
+  CreateTestResources: !Or [ Condition: BravoConditions, Condition: AlphaConditions ]
+
+Resources:
+  ECR:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://s3.amazonaws.com/${TemplateBucket}/templates/ecr.yaml"
+      Parameters:
+        PipelineName: !Ref PipelineName
+
+  DeploymentPipelineTest:
+    Type: AWS::CloudFormation::Stack
+    Condition: CreateTestResources
+    Properties:
+      TemplateURL: !Sub "https://s3.amazonaws.com/${TemplateBucket}/templates/deployment-pipeline-test.yaml"
+      Parameters:
+        GitHubUser: !Ref GitHubUser
+        GitHubToken: !Ref GitHubToken
+        GitHubRepo: !Ref GitHubRepo
+        GitHubBranch: !Ref GitHubBranch
+        Repository: !GetAtt ECR.Outputs.Repository
+        Env: !Ref Env
+        Package: !Ref Package
+        TargetName: !Ref TargetName
+        PipelineName: !Ref PipelineName
+        CodeDeployAppName: !Ref CodeDeployAppName
+    DependsOn: ECR
+
+  DeploymentPipelineProd:
+    Type: AWS::CloudFormation::Stack
+    Condition: CreateProdResources
+    Properties:
+      TemplateURL: !Sub "https://s3.amazonaws.com/${TemplateBucket}/templates/deployment-pipeline-prod.yaml"
+      Parameters:
+        GitHubUser: !Ref GitHubUser
+        GitHubToken: !Ref GitHubToken
+        GitHubRepo: !Ref GitHubRepo
+        GitHubBranch: !Ref GitHubBranch
+        Repository: !GetAtt ECR.Outputs.Repository
+        Env: !Ref Env
+        Package: !Ref Package
+        TargetName: !Ref TargetName
+        PipelineName: !Ref PipelineName
+        LoadBalancerName: !Ref LoadBalancerName
+        CodeDeployAppName: !Ref CodeDeployAppName
+    DependsOn: ECR
