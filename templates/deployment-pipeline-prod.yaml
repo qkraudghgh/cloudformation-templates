@@ -43,6 +43,7 @@ Conditions:
 
 
 Resources:
+  # ServiceRole은 각 회사나 App 정책에 따라 상이할 수 있으므로 반드시 수정 필요
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -133,6 +134,7 @@ Resources:
                   - codedeploy:*
                   - iam:PassRole
 
+  # CodePipeline에서 이용할 S3 ArtifactBucket 생성
   ArtifactBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -144,6 +146,7 @@ Resources:
         Type: CODEPIPELINE
       Source:
         Type: CODEPIPELINE
+        # BuildSpec을 정의할 수 있음
         BuildSpec: |
           version: 0.2
           phases:
@@ -168,6 +171,7 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/docker:17.09.0
         Type: LINUX_CONTAINER
+        # BuildSpec에서 값을 받아올 수 있게 환경변수 정의
         EnvironmentVariables:
           - Name: AWS_DEFAULT_REGION
             Value: !Ref AWS::Region
@@ -182,22 +186,27 @@ Resources:
 
   CodeDeployApplication:
     Type: AWS::CodeDeploy::Application
-    Condition: UseNewDeployApp
+    Condition: UseNewDeployApp # 미리 만들어져있는 CodeDeploy Application이 있으면 생성되지 않음
     Properties:
       ApplicationName: !Ref PipelineName
 
   CodeDeployDeploymentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
     Properties:
+      # CodeDeploy App name을 parameter로 받았으면 해당 이름을 사용하고 그렇지 않으면 새로 만든 Application name을 사용
       ApplicationName: !If [ UseNewDeployApp, !Ref CodeDeployApplication, !Ref CodeDeployAppName ]
       DeploymentGroupName: !Ref Env
       ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
+      # ASG에 배포한다고 명시함
       AutoScalingGroups:
         - !Ref TargetName
+      # 배포 전략은 HalfAtATime
       DeploymentConfigName: CodeDeployDefault.HalfAtATime
+      # In_Place 배포를 하며 Traffic 제어도 필요하다고 명시함
       DeploymentStyle:
         DeploymentType: IN_PLACE
         DeploymentOption: WITH_TRAFFIC_CONTROL
+      # WITH_TRAFFIC_CONTROL을 명시해주었으므로 트래픽을 관리할 리소스를 정의 (Classic Loadbalancer, ELB/TargetGroup)
       LoadBalancerInfo:
         TargetGroupInfoList:
           - Name: !Ref LoadBalancerName

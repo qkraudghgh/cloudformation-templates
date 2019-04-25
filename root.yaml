@@ -2,10 +2,12 @@
 AWSTemplateFormatVersion: 2010-09-09
 
 
+# Cloudformation Stack 생성시 표기되는 Description
 Description: >
   web-page AutoDeploy CodePipeline Templates
 
 
+# AWS Console에서 입력 받을 값들을 정의함
 Parameters:
   GitHubUser:
     Type: String
@@ -71,6 +73,7 @@ Parameters:
     Description: >
       The S3 bucket from which to fetch the templates used by this stack.
 
+# AWS Console에서 Parameter들의 순서나 Grouping을 담당
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterLabels:
@@ -107,20 +110,25 @@ Metadata:
           - TargetName
           - LoadBalancerName
 
+
+# 조건 생성
 Conditions:
   CreateProdResources: !Equals [ !Ref Env, production ]
   BravoConditions: !Equals [ !Ref Env, bravo ]
   AlphaConditions: !Equals [ !Ref Env, alpha ]
   CreateTestResources: !Or [ Condition: BravoConditions, Condition: AlphaConditions ]
 
+
+# Resources 생성
 Resources:
+  # ECR Repository 생성
   ECR:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL: !Sub "https://s3.amazonaws.com/${TemplateBucket}/templates/ecr.yaml"
       Parameters:
         PipelineName: !Ref PipelineName
-
+  # Alpha, Bravo 환경일 때만 생기는 Stack
   DeploymentPipelineTest:
     Type: AWS::CloudFormation::Stack
     Condition: CreateTestResources
@@ -137,8 +145,8 @@ Resources:
         TargetName: !Ref TargetName
         PipelineName: !Ref PipelineName
         CodeDeployAppName: !Ref CodeDeployAppName
-    DependsOn: ECR
-
+    DependsOn: ECR # ECR이 생성 된 이후에 생성되어야 함
+  # Production 환경일 때만 생기는 Stack
   DeploymentPipelineProd:
     Type: AWS::CloudFormation::Stack
     Condition: CreateProdResources
@@ -156,4 +164,4 @@ Resources:
         PipelineName: !Ref PipelineName
         LoadBalancerName: !Ref LoadBalancerName
         CodeDeployAppName: !Ref CodeDeployAppName
-    DependsOn: ECR
+    DependsOn: ECR # ECR이 생성 된 이후에 생성되어야 함
